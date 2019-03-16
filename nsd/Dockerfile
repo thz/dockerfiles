@@ -1,5 +1,8 @@
-FROM alpine:edge
+ARG IMAGE_PREFIX
+FROM ${IMAGE_PREFIX:-}alpine:edge
 MAINTAINER th-docker@thzn.de
+
+ADD qemu-statics /usr/bin/
 
 RUN apk add --update nsd
 
@@ -12,4 +15,5 @@ VOLUME /config
 EXPOSE 53/udp
 EXPOSE 53
 
+RUN rm -v /usr/bin/qemu-*-static
 ENTRYPOINT [ "/entry.sh" ]
