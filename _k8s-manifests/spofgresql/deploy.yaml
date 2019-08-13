@@ -1,0 +1,97 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: spofgresql
+  name: spofgresql
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: spofgresql
+  template:
+    metadata:
+      labels:
+        app: spofgresql
+    spec:
+      containers:
+      - name: postgres
+        image: postgres:12-alpine
+        envFrom:
+        - secretRef:
+            name: spofgresql-password
+        volumeMounts:
+        - name: pg-data
+          mountPath: /var/lib/postgresql/data
+        - name: pg-var-run
+          mountPath: /var/run/postgresql
+      - name: backup
+        image: thzpub/psql-backup:v2
+        command:
+        - /bin/bash
+        - -c
+        - |
+          set -e
+          : ${BACKUP_DELAY:=60}
+          : ${BACKUP_INTERVAL:=3600}
+          echo "$(date -uIs) Waiting BACKUP_DELAY=$BACKUP_DELAY seconds..."
+          sleep $BACKUP_DELAY
+          echo "$(date -uIs) Starting continuous backup with BACKUP_INTERVAL=$BACKUP_INTERVAL seconds intervals..."
+          while true; do
+            TAG=$(date -uIs)
+            echo "$TAG starting backup cycle $TAG"
+            BACKUP="/backup/$TAG"
+            psql -U postgres -l
+            echo "$(date -uIs) dumping all databases ..."
+            pg_dumpall -U postgres | gzip > ${BACKUP}-lock
+            echo "$(date -uIs) Done."
+            mv -v ${BACKUP}-lock ${BACKUP}
+
+            # TODO validate backup
+
+            (
+              # always refetching credentials allows key rotation without container restart
+              AWS_ACCESS_KEY_ID=$(< /run/s3-backup-secret/AWS_ACCESS_KEY_ID )
+              AWS_SECRET_ACCESS_KEY=$(< /run/s3-backup-secret/AWS_SECRET_ACCESS_KEY )
+              export AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY
+
+              echo "$(date -uIs) Uploading to s3://$BUCKET_PATH/$TAG ..."
+              aws s3 cp "$BACKUP" "s3://$BUCKET_PATH/$TAG" || true
+              echo "$(date -uIs) Done."
+
+              echo "Data retention..."
+              cd /backup
+              ls 2*UTC | retain | tee ${BACKUP}-retention
+
+              cat ${BACKUP}-retention | while read x; do
+                echo "$(date -uIs) Removing s3://$BUCKET_PATH/$x ..."
+                aws s3 rm s3://$BUCKET_PATH/$x || true
+                echo "$(date -uIs) Done."
+                rm -v $x
+              done
+              rm -v ${BACKUP}-retention
+            )
+            echo "$(date -uIs) backup cycle completed."
+            sleep $BACKUP_INTERVAL
+          done
+        envFrom:
+        - configMapRef:
+            name: spofgresql-config
+        volumeMounts:
+        - name: s3-backup-secret
+          mountPath: /run/s3-backup-secret
+        - name: pg-backup
+          mountPath: /backup
+        - name: pg-var-run
+          mountPath: /var/run/postgresql
+      volumes:
+      - name: pg-var-run
+        emptyDir:
+      - name: pg-data
+        emptyDir:
+      - name: pg-backup
+        emptyDir:
+      - name: s3-backup-secret
+        secret:
+          secretName: spofgresql-s3-backup

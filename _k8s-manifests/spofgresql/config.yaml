@@ -1,0 +1,9 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: spofgresql-config
+data:
+  BUCKET_PATH: backup.example.com/db
+  BACKUP_INTERVAL: "900"
+  BACKUP_DELAY: "300"
