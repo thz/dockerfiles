@@ -7,3 +7,4 @@ data:
   BUCKET_PATH: backup.example.com/db
   BACKUP_INTERVAL: "900"
   BACKUP_DELAY: "300"
+  INIT_NEW_DATABASE: "no"

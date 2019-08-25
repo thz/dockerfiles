@@ -15,12 +15,38 @@ spec:
       labels:
         app: spofgresql
     spec:
-      containers:
-      - name: postgres
+      initContainers:
+      - name: init
         image: postgres:12-alpine
         envFrom:
         - secretRef:
             name: spofgresql-password
+        volumeMounts:
+        - name: pg-data
+          mountPath: /var/lib/postgresql/data
+        - name: config
+          mountPath: /var/run/spofgresql-config
+        command:
+        - /bin/bash
+        - -c
+        - |
+          if [ -s /var/lib/postgresql/data/PG_VERSION ]; then
+            echo "PG_VERSION found in data dir. terminating."
+            exit 0
+          fi
+          echo "PG_VERSION not found in data dir. evaluating config for action..."
+          while sleep 1; do
+            # looping here to get updates from mounted configMap
+            if grep -q yes /var/run/spofgresql-config/INIT_NEW_DATABASE 2> /dev/null; then
+              echo "starting initdb..."
+              docker-entrypoint.sh -V # triggers initdb
+              exit 0
+            fi
+          done
+          exit 0
+      containers:
+      - name: postgres
+        image: postgres:12-alpine
         volumeMounts:
         - name: pg-data
           mountPath: /var/lib/postgresql/data
@@ -92,6 +118,9 @@ spec:
         emptyDir:
       - name: pg-backup
         emptyDir:
+      - name: config
+        configMap:
+          name: spofgresql-config
       - name: s3-backup-secret
         secret:
           secretName: spofgresql-s3-backup
