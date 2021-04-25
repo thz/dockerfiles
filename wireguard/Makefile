@@ -1,5 +1,5 @@
 IMAGE=thzpub/wireguard
-VERSION=1.0.0
+VERSION=1.1.2
 
 ARCHS:=amd64 i386 arm32v7 arm64v8
 
@@ -11,13 +11,15 @@ push-%: build-%
 
 # manifest command requires all references pushed to the registry
 manifest: push
-	docker manifest create $(IMAGE):$(VERSION) \
-		$(ARCHS:%=$(IMAGE):%-$(VERSION))
+	docker manifest create $(IMAGE):$(VERSION) $(ARCHS:%=$(IMAGE):%-$(VERSION))
+	docker manifest push --purge $(IMAGE):latest
+	docker manifest create $(IMAGE):latest $(ARCHS:%=$(IMAGE):%-$(VERSION))
 	@echo "manifest can be pushed with: make manifest-push"
 
 manifest-push:
 	@echo "manifest can be purged with: docker manifest push --purge $(IMAGE):$(VERSION)"
 	docker manifest push $(IMAGE):$(VERSION)
+	docker manifest push $(IMAGE):latest
 
 # binfmt support for cross-building docker images
 qemu:

@@ -4,7 +4,9 @@ MAINTAINER th-docker@thzn.de
 
 ADD qemu-statics /usr/bin/
 
-RUN apk add --update bash tcpdump wireguard-tools socat
+
+RUN grep main /etc/apk/repositories|sed s/main/testing/ >> /etc/apk/repositories
+RUN apk add --update bash curl tcpdump wireguard-tools wireguard-go socat
 
 ADD entry.sh /
 RUN chmod 0755 /entry.sh

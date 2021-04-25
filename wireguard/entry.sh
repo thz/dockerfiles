@@ -29,7 +29,7 @@ setup() {
 	fi
 
 	echo "Creating wireguard interface [$INTERFACE]." >&2
-	ip link add dev "$INTERFACE" type wireguard
+	ip link add dev "$INTERFACE" type wireguard || wireguard-go "$INTERFACE"
 
 	echo "Configuring listen port: $LISTEN_PORT" >&2
 	wg set "$INTERFACE" \
@@ -55,7 +55,7 @@ setup
 while sleep 1; do
 	printf "\n\n"
 	date -uIs
-	ip -c addr show type wireguard
+	ip -c addr show dev "$INTERFACE"
 	printf "\n"
 	wg show
 done
